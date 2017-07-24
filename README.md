@@ -2,7 +2,7 @@
 Python >= 2.7
 
 ## Quick start
-```py
+```sh
  # 安装python虚拟环境命令virtualenv
  $ sudo yum install -y virtualenv
 
