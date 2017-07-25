@@ -59,18 +59,18 @@ class DamatuApi():
             return jres['ret']
 
     # 上传验证码 参数filePath 验证码图片路径 如d:/1.jpg type是类型，查看http://wiki.dama2.com/index.php?n=ApiDoc.Pricedesc  return 是答案为成功 如果为负数 则为错误码
-    def decode(self, filedata, type):
-        # f = open(filePath, 'rb')
-        # fdata = f.read()
-        # filedata = base64.b64encode(fdata)
-        # f.close()
+    def decode(self, filePath, type):
+        f = open(filePath, 'rb')
+        fdata = f.read()
+        filedata = base64.b64encode(fdata)
+        f.close()
         data = {'appID': self.ID,
                 'user': self.username,
                 'pwd': self.getPwd(),
                 'type': type,
                 'fileDataBase64': filedata,
-                'sign': self.getSign(base64.b64decode(filedata))
-                }
+                'sign': self.getSign(filePath)
+                }# self.getSign(base64.b64decode(filedata))
         res = self.post('d2File', data)
         res = str(res).encode('utf-8')
         jres = json.loads(res)
@@ -138,7 +138,7 @@ class Bill(object):
                                 '&fpdm=%s&r=0.8492015565279871'
                                 % (callback, fpdm), verify=False)
         except Exception as e:
-            print(u'获取二维码图片错误 - %s' % str(e))
+            print(u'获取验证码图片错误 - %s' % str(e))
         else:
             return json.loads(resp.content[len(callback) + 1:-1])
         return None
@@ -151,7 +151,12 @@ class Bill(object):
 
 class Excel(object):
     def __init__(self):
-        self.path = '/Users/wangyangyang/Meituan_pro/damatuWeb-Python/发票测试.xlsx'
+        self.path = '/Users/wangyangyang/Desktop/test.bmp'
+
+    def save(self, text):
+        with open(self.path, 'w') as f:
+            f.write(base64.b64decode(text))
+            # f.write(text)
 
     def setup(self, path):
         if not os.path.isfile(path):
@@ -183,7 +188,9 @@ class Excel(object):
             dmt = DamatuApi("xiaolongchang", "858993460")
             print('*********')
             if keys:
-                print(dmt.decode(keys['key1'], 60))  # 上传打码
+                self.save(keys['key1'])
+                print(dmt.decode(self.path, 60))  # 上传打码
+                break
 
 
 
