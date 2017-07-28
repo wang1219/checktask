@@ -227,12 +227,13 @@ class Bill(object):
         return False
 
     def get_crypto(self):
-        f = open("./crypto-js-develop/src/core.js", 'r')
-        line = f.readline()
         htmlstr = ''
-        while line:
-            htmlstr = htmlstr + line
+        with open("./crypto-js-develop/src/core.js", 'r') as f:
             line = f.readline()
+            while line:
+                htmlstr = htmlstr + line
+                line = f.readline()
+
         ctx = execjs.compile(htmlstr)
         return ctx.call('test', 16)
 
