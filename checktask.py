@@ -9,6 +9,7 @@ import urllib
 import urllib2
 import json
 import base64
+import datetime
 from binascii import b2a_hex
 
 import execjs
@@ -150,6 +151,10 @@ class Bill(object):
             self.bill_date = bills[2]
             self.bill_money = bills[3]
 
+            # self.bill_date = datetime.datetime.strftime(self.bill_date, "%Y-%m-%d %H:%M:%S")
+            self.bill_date = '20170614'
+            # print('bill_date:%s' % self.bill_date)
+
     def save(self, text):
         with open(PictureFileSavePath, 'w') as f:
             f.write(base64.b64decode(text))
@@ -158,10 +163,11 @@ class Bill(object):
     def _get_verification_picture(self):
         try:
             print('查询验证码')
-            callback = "jQuery%s_%s" % (
-                ''.join([random.choice(string.digits) for _ in range(22)]),
-                ''.join([random.choice(string.digits) for _ in range(13)]))
-            r = '0.%s' % ''.join([random.choice(string.digits) for _ in range(16)])
+            # callback = "jQuery%s_%s" % (
+            #     ''.join([random.choice(string.digits) for _ in range(22)]),
+            #     ''.join([random.choice(string.digits) for _ in range(13)]))
+            callback = 'jQuery110209791718499773361_1501601178568'
+            r = '0.030927983281551885',  # '0.%s' % ''.join([random.choice(string.digits) for _ in range(16)])
             fpdm = self.bill_id
             resp = requests.get('https://fpcyweb.tax.sh.gov.cn:1001/WebQuery/yzmQuery?callback=%s'
                                 '&fpdm=%s&r=%s' % (callback, fpdm, r), verify=False)
@@ -196,25 +202,30 @@ class Bill(object):
         return False
 
     def _post_request(self, callback, key2, key3, key4):
+        key4 = '01'
+        print('key4', key4, type(key4))
         try:
-            url = 'https://fpcyweb.tax.sh.gov.cn:1001/WebQuery/query'
-            data = {
-                'callback': callback,
-                'fpdm': str(self.bill_id),
-                'fphm': str(self.bill_num),
-                'kprq': str(self.bill_date),
-                'fpje': str(self.bill_money),
-                'fplx': key4,
-                'yzm': self.verification_code,
-                'yzmSj': key2, #str(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
-                'index': key3,
-                'iv': self.get_crypto(), #b2a_hex(Random.get_random_bytes(128 / 8)),
-                'salt': self.get_crypto(), #b2a_hex(Random.get_random_bytes(128 / 8)),
-                '_': ''.join([random.choice(string.digits) for _ in range(13)])
-            }
+            url = 'https://fpcyweb.tax.sh.gov.cn:1001/WebQuery/query?'
+            params = 'callback={callback}&fpdm={fpdm}' \
+                     '&fphm={fphm}&kprq={kprq}&fpje={fpje}&fplx={fplx}&yzm={yzm}&yzmSj={yzmSj}&index={index}' \
+                     '&iv={iv}&salt={salt}&_={_}'.format(
+                callback=callback,
+                fpdm=str(self.bill_id),
+                fphm=str(self.bill_num),
+                kprq=str(self.bill_date),
+                fpje=str(self.bill_money),
+                fplx=key4,
+                yzm=urllib.quote(self.verification_code),
+                yzmSj=urllib.quote(key2),  # str(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+                index=key3,
+                iv=b2a_hex(Random.get_random_bytes(128 / 8)), #self.get_crypto(),
+                salt=b2a_hex(Random.get_random_bytes(128 / 8)), # self.get_crypto(),
+                _='1501237442168'  # ''.join([random.choice(string.digits) for _ in range(13)])
+            )
+            url = url + params
             print(url)
-            print(json.dumps(data))
-            resp = requests.post(url, data=json.dumps(data), verify=False)
+
+            resp = requests.get(url, verify=False)
             status_code = resp.status_code
             print('*************')
             print(resp.content, resp.text)
@@ -264,11 +275,11 @@ class Excel(object):
             for i in range(1, sheet.max_column):
                 bills.append(Bill([row.value for row in sheet[chr(65 + i)]]))
 
-            # 按行读取
-            # for i in range(1, sheet.max_row):
-            #     a = [col.value for col in sheet[str(i)]]
-            #     if len(a) == 4:
-            #         bills.append(Bill(a, i))
+                # 按行读取
+                # for i in range(1, sheet.max_row):
+                #     a = [col.value for col in sheet[str(i)]]
+                #     if len(a) == 4:
+                #         bills.append(Bill(a, i))
 
         self.bills = bills
 
@@ -282,6 +293,7 @@ class Excel(object):
 
             while not is_ok:
                 is_ok = bill.check_task()
+                # bill._post_request('', '', '', '')
                 break
             break
 
