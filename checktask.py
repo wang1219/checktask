@@ -281,9 +281,7 @@ class Bill(object):
             print(u'请求验证失败，正在重试请稍等！- %s' % str(e))
             return False
         else:
-            data = resp.content.encode('utf-8')
-            data = json.loads(data[len(callback) + 1:-1])
-            if '"key1":"002"' in data:
+            if '"key1":"002"' in resp.content:
                 return True
         return False
 
@@ -419,8 +417,12 @@ class Excel(object):
             is_ok = False
 
             while not is_ok:
-                bill.check_task()
-                is_ok = self.check_succ()
+                try:
+                    bill.check_task()
+                    is_ok = self.check_succ()
+                except Exception as e:
+                    print('Check error - %s' % str(e))
+                    continue
 
         self._send_mail()
 

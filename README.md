@@ -15,10 +15,8 @@ $ cd path
 ## Quick start
 $ cd /path/to/
 
-# 安装虚拟环境
+# 安装虚拟环境及依赖包
 $ python tools/install_venv.py
-# 安装依赖包
-$ tools/with_venv.sh python setup.py install
 
 # 运行(Crontab时请使用绝对路径，如：/opt/app/tools/with_venv.sh python /opt/app/checktask.py)
 $ tools/with_venv.sh python checktask.py
