@@ -3,34 +3,101 @@
 import os
 import os.path
 import hashlib
-import random
-import string
+import smtplib
 import urllib
 import urllib2
 import json
 import base64
-import datetime
 from binascii import b2a_hex
+from email.header import Header
+from email.mime.text import MIMEText
 
-import execjs
 import requests
 from openpyxl import load_workbook
-from Crypto.Cipher import AES
 from Crypto import Random
+import xlrd
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 # 禁用安全请求警告
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+# 邮箱配置
+MAIL_HOST = 'smtp.sina.com'
+MAIL_PORT = 25
+MAIL_USER = 'jackchen815@sina.com'
+MAIL_PASSWORD = '****'
+MAIL_TO = ['****@126.com']
+MAIL_TITLE = u'报表'
 
 # DaMaTu相关配置
 DamatuUserName = 'xiaolongchang'
 DamatuUserPassWD = '858993460'
 
 # Excel表格所在位置
-Excel_filepath = './发票测试.xlsx'
+Excel_filepath = './excel.xls'
 
 # 验证码保存路径
-PictureFileSavePath = '/Users/wangyangyang/Desktop/test.bmp'
+PictureFileSavePath = ''
+
+HTML_TEMPLATE = """
+<html>
+<head>
+<meta http-equiv = "Content-Type" content = "text/html; charset = UTF-8">
+<title>报表</title>
+<style type="text/css">
+    table {
+            border: 1px solid #345;
+            border-collapse: collapse;
+    }
+    table th {
+        color: white;
+        background-color: #a2c4c9;
+    }
+    table td, table th {
+        padding: 0.5em 1em;
+        border: 1px solid #345;
+        vertical-align:top;
+    }
+    table td .index{
+        width: 50px;
+    }
+    table td .hostname{
+        width: 200px;
+    }
+    .summary-table th {
+        text-align: right;
+    }
+    .warning {
+        font-weight: bold;
+        color: red;
+    }
+    table td h2 {
+        color:blue;
+        font-size:1.5em;
+        text-align:center;
+    }
+    .manager {
+        color:red;
+    }
+    .flag {
+        font-weight: bold;
+        font-size:0.7em;
+        color:blue;
+    }
+</style>
+</head>
+<body>
+    <p>
+    <h3>检测结果详情：</h3>
+    </p>
+    {{report}}
+    </br>
+</body>
+</html>
+"""
 
 
 def md5str(str):  # md5加密字符串
@@ -137,23 +204,14 @@ class DamatuApi():
 
 
 class Bill(object):
-    def __init__(self, bills, row=None):
-        self.bill_id = ''
-        self.bill_num = ''
-        self.bill_date = ''
-        self.bill_money = ''
+    def __init__(self, title, id, num, date, money):
+        self.title = title
+        self.bill_id = id
+        self.bill_num = num
+        self.bill_date = date
+        self.bill_money = money
         self.verification_code = None
-        self.row = row
-
-        if len(bills) == 4:
-            self.bill_id = bills[0]
-            self.bill_num = bills[1]
-            self.bill_date = bills[2]
-            self.bill_money = bills[3]
-
-            # self.bill_date = datetime.datetime.strftime(self.bill_date, "%Y-%m-%d %H:%M:%S")
-            self.bill_date = '20170614'
-            # print('bill_date:%s' % self.bill_date)
+        self.is_ok = False
 
     def save(self, text):
         with open(PictureFileSavePath, 'w') as f:
@@ -179,16 +237,11 @@ class Bill(object):
 
     def check_task(self):
         keys, callback = self._get_verification_picture()
-        if keys:
-            print(keys, callback)
-            print('key4:%s' % keys.get('key4'))
-
         if keys and keys.get('key4') == '00':
             # keys['key4'] == '00' 为最正常验证码，其他奇葩的他们解析不了
-            self.save(keys['key1'])
+            # self.save(keys['key1'])
 
             verification_code = dmt.decode(keys['key1'], 200)
-            print("verification_code", verification_code)
             try:
                 verification_code = int(verification_code)
                 return False
@@ -196,14 +249,13 @@ class Bill(object):
                 if verification_code == 'ERROR':
                     return False
                 self.verification_code = verification_code
-                self._post_request(callback, keys.get('key2'), keys.get('key3'), keys.get('key4'))
+                self.is_ok = self._post_request(callback, keys.get('key2'), keys.get('key3'), keys.get('key4'))
                 return True
 
         return False
 
     def _post_request(self, callback, key2, key3, key4):
         key4 = '01'
-        print('key4', key4, type(key4))
         try:
             url = 'https://fpcyweb.tax.sh.gov.cn:1001/WebQuery/query?'
             params = 'callback={callback}&fpdm={fpdm}' \
@@ -216,72 +268,147 @@ class Bill(object):
                 fpje=str(self.bill_money),
                 fplx=key4,
                 yzm=urllib.quote(self.verification_code),
-                yzmSj=urllib.quote(key2),  # str(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+                yzmSj=urllib.quote(key2),
                 index=key3,
-                iv=b2a_hex(Random.get_random_bytes(128 / 8)), #self.get_crypto(),
-                salt=b2a_hex(Random.get_random_bytes(128 / 8)), # self.get_crypto(),
+                iv=b2a_hex(Random.get_random_bytes(128 / 8)),
+                salt=b2a_hex(Random.get_random_bytes(128 / 8)),
                 _='1501237442168'  # ''.join([random.choice(string.digits) for _ in range(13)])
             )
             url = url + params
-            print(url)
-
             resp = requests.get(url, verify=False)
             status_code = resp.status_code
-            print('*************')
-            print(resp.content, resp.text)
-            print(status_code)
         except Exception as e:
             print(u'请求验证失败，正在重试请稍等！- %s' % str(e))
             return False
         else:
-            pass
+            data = resp.content.encode('utf-8')
+            data = json.loads(data[len(callback) + 1:-1])
+            if '"key1":"002"' in data:
+                return True
         return False
 
-    def get_crypto(self):
-        htmlstr = ''
-        with open("./crypto-js-develop/src/core.js", 'r') as f:
-            line = f.readline()
-            while line:
-                htmlstr = htmlstr + line
-                line = f.readline()
-
-        ctx = execjs.compile(htmlstr)
-        return ctx.call('test', 16)
-
     def __str__(self):
-        return "bill_id:%s bill_num:%s bill_date:%s bill_money:%s " % (
-            self.bill_id, self.bill_num, self.bill_date, self.bill_money
+        return "title:%s bill_id:%s bill_num:%s bill_date:%s bill_money:%s " % (
+            self.title, self.bill_id, self.bill_num, self.bill_date, self.bill_money
         )
 
 
 class Excel(object):
-    def setup(self, path):
-        if not os.path.isfile(path):
-            raise Exception(u'文件%s不存在' % path)
+    def setup(self, filepath):
+        if not os.path.isfile(filepath):
+            raise Exception(u'文件%s不存在' % filepath)
 
-        wb = load_workbook(path)
+        if filepath.endswith('.xls'):
+            self.bills = self._get_excel_xls(filepath)
+        else:
+            self.bills = self._get_excel_xlsx(filepath)
+
+    def _get_excel_xls(self, filepath):
+        wb = xlrd.open_workbook(filepath)
         bills = []
+        for sheet in wb.sheets():
+            current_title = ''
 
+            for row in range(sheet.nrows):
+                row_data = [data for data in sheet.row_values(row)]
+                if len(row_data) != 4 or not row_data[0]:
+                    continue
+                if isinstance(row_data[0], basestring) and \
+                        (isinstance(row_data[1], basestring) or
+                             isinstance(row_data[2], basestring) or
+                             isinstance(row_data[4], basestring)):
+                    continue
+                if isinstance(row_data[0], basestring):
+                    current_title = row_data[0]
+                else:
+                    bills.append(Bill(current_title, int(row_data[0]), int(row_data[1]),
+                                      xlrd.xldate.xldate_as_datetime(row_data[2], 0).strftime("%Y%m%d"), row_data[3]))
+        return bills
+
+    def _get_excel_xlsx(self, filepath):
+        wb = load_workbook(filepath)
+        bills = []
         for sheetname in wb.sheetnames:
             sheet = wb.get_sheet_by_name(sheetname)
-            # if len(list(sheet["A"])) != 4:
-            #     raise Exception(u'Excel表格不是4行，请检查')
-            #
-            # if sheet["A1"] != '发票代码' or sheet["A2"] != '发票号码' or \
-            #         sheet["A3"] != '开票日期' or sheet["A4"] != '开具金额（不含税）':
-            #     raise Exception(u'Excel格式错误，请检查')
 
-            # 按列读取
-            for i in range(1, sheet.max_column):
-                bills.append(Bill([row.value for row in sheet[chr(65 + i)]]))
+            # 按行读取
+            current_title = ''
+            for i in range(1, sheet.max_row + 1):
+                row_data = [col.value for col in sheet[str(i)]]
+                if len(row_data) != 4 or not row_data[0]:
+                    continue
+                if isinstance(row_data[0], basestring) and \
+                        (isinstance(row_data[1], basestring) or
+                             isinstance(row_data[2], basestring) or
+                             isinstance(row_data[4], basestring)):
+                    continue
+                if isinstance(row_data[0], basestring):
+                    current_title = row_data[0]
+                else:
+                    bills.append(Bill(current_title, int(row_data[0]), int(row_data[1]),
+                                      row_data[2].strftime("%Y%m%d"), row_data[3]))
+        return bills
 
-                # 按行读取
-                # for i in range(1, sheet.max_row):
-                #     a = [col.value for col in sheet[str(i)]]
-                #     if len(a) == 4:
-                #         bills.append(Bill(a, i))
+    def check_succ(self):
+        for bill in self.bills:
+            if not bill.is_ok:
+                return False
+        return True
 
-        self.bills = bills
+    def _build_mail_table(self, bills):
+        report_list = []
+        report_table_head = '<table class="detail-table"><tr><th>序号</th><th>发票代码</th><th>发票号码</th><th>发票日期</th><th>开具金额</th><th>达到最大次数</th></tr>{{report_data}}</table>'
+
+        num = 0
+        for bill in bills:
+            num += 1
+            report_list.append(
+                '<tr><td class="index">%s</td><td class="hostname">%s</td><td class="hostname">%s</td><td class="hostname">%s</td><td class="hostname">%s</td><td class="hostname">%s</td></tr>' % (
+                    str(num),
+                    bill.bill_id,
+                    bill.bill_num,
+                    bill.bill_date,
+                    bill.bill_money,
+                    bill.is_ok
+                ))
+        report_table_head = report_table_head.decode('utf-8')
+        return report_table_head.replace('{{report_data}}', ''.join(report_list))
+
+    def _get_report(self):
+        org_bill = {}
+        report_list = []
+        for bill in self.bills:
+            if bill.title not in org_bill:
+                org_bill[bill.title] = []
+            org_bill[bill.title].append(bill)
+
+        for title, bills in org_bill.items():
+            report_list.append('<h4>%s：</h4></br>%s</br></br>'.decode('utf-8') %
+                               (title.decode('utf-8'), self._build_mail_table(bills)))
+
+        content = HTML_TEMPLATE.decode('utf-8')
+        content = content.replace('{{report}}', ''.join(report_list))
+        return content
+
+    def _send_mail(self):
+        content = self._get_report()
+        msg = MIMEText(content, 'html', 'utf-8')
+        msg['Subject'] = Header('{sub}'.format(
+            sub=MAIL_TITLE.encode('utf-8') if MAIL_TITLE else ''), 'utf-8')
+        msg['From'] = MAIL_USER
+        msg['To'] = ','.join(MAIL_TO)
+        try:
+            s = smtplib.SMTP(MAIL_HOST, MAIL_PORT)
+            s.login(MAIL_USER, MAIL_PASSWORD)
+            s.sendmail(MAIL_USER, MAIL_TO, msg.as_string())
+            s.close()
+            print('Send mail succ - %s' % (MAIL_TO))
+            return True
+        except Exception as e:
+            print('Send mail error - %s - %s - %s' % (
+                str(e), MAIL_TITLE, MAIL_TO
+            ))
+            return False
 
     def check(self):
         if not hasattr(self, 'bills'):
@@ -292,10 +419,10 @@ class Excel(object):
             is_ok = False
 
             while not is_ok:
-                is_ok = bill.check_task()
-                # bill._post_request('', '', '', '')
-                break
-            break
+                bill.check_task()
+                is_ok = self.check_succ()
+
+        self._send_mail()
 
 
 dmt = DamatuApi(DamatuUserName, DamatuUserPassWD)

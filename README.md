@@ -9,18 +9,19 @@ Python >= 2.7
  # 进入项目路径
  $ cd path
 
- # 安装名为.venv的虚拟环境
- $ virtualenv .venv
+ # Tip
+ 使用前请先配置邮箱相关信息
 
- # 启用虚拟环境, 启用成功后虚拟环境名字会显示在目录最前面，可能像：(.venv) ➜  checktask git:(master) ✗
- $ source .venv/bin/activate
+ ## Quick start
+```sh
+$ cd /path/to/
 
- # 安装依赖包
- $ pip install -r requirements.txt -i http://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com
+# 安装虚拟环境
+$ python tools/install_venv.py
+# 安装依赖包
+$ tools/with_venv.sh python setup.py install
 
- # 运行
- $ python checktask.py
-
- # 运行完成后退出虚拟环境
- $ deactivate
+# 运行(Crontab时请使用绝对路径，如：/opt/app/tools/with_venv.sh python /opt/app/checktask.py)
+$ tools/with_venv.sh python checktask.py
 ```
+
