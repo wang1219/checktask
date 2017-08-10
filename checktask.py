@@ -282,6 +282,7 @@ class Bill(object):
             return False
         else:
             if '"key1":"002"' in resp.content:
+                print(u'请求达到最大次数')
                 return True
         return False
 
@@ -419,7 +420,7 @@ class Excel(object):
             while not is_ok:
                 try:
                     bill.check_task()
-                    is_ok = self.check_succ()
+                    is_ok = bill.is_ok
                 except Exception as e:
                     print('Check error - %s' % str(e))
                     continue
