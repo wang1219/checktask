@@ -2,45 +2,78 @@
 
 import os
 import os.path
+import sys
 import hashlib
 import smtplib
 import urllib
 import urllib2
 import json
+import time
 import base64
+import logging
+from logging import handlers
 from binascii import b2a_hex
 from email.header import Header
 from email.mime.text import MIMEText
 
-import requests
-from openpyxl import load_workbook
-from Crypto import Random
 import xlrd
+import requests
+from Crypto import Random
+from openpyxl import load_workbook
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
-import sys
+
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
 # 禁用安全请求警告
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
+# Excel表格所在位置
+Excel_filepath = './excel.xls'
+
 # 邮箱配置
 MAIL_HOST = 'smtp.sina.com'
 MAIL_PORT = 25
 MAIL_USER = 'jackchen815@sina.com'
-MAIL_PASSWORD = '****'
-MAIL_TO = ['****@126.com']
+MAIL_PASSWORD = 'qiong***'
+MAIL_TO = ['**@126.com']
 MAIL_TITLE = u'报表'
+
+# 日志目录
+LOG_DIR = '/var/log/checktask'
+LOG_LEVEL = 'DEBUG'
+LOG_NAME = 'checktask'
+
+# 超时时间设置
+CHECK_TIMEOUT = 30 * 60
 
 # DaMaTu相关配置
 DamatuUserName = 'xiaolongchang'
 DamatuUserPassWD = '858993460'
 
-# Excel表格所在位置
-Excel_filepath = './excel.xls'
-
 # 验证码保存路径
 PictureFileSavePath = ''
+
+
+LOG = None
+
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)
+
+if LOG_NAME not in logging.Logger.manager.loggerDict:
+    log_file_path = os.path.join(LOG_DIR, '%s.log' % LOG_NAME)
+    fh = handlers.TimedRotatingFileHandler(log_file_path, when='d')
+    formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s '
+                                  '%(module)s %(lineno)d %(message)s')
+    fh.setFormatter(formatter)
+    fh.setLevel(LOG_LEVEL.upper())
+
+    logger = logging.getLogger(LOG_NAME)
+    logger.addHandler(fh)
+    logger.setLevel(LOG_LEVEL.upper())
+    LOG = logger
+else:
+    LOG = logging.getLogger(LOG_NAME)
 
 HTML_TEMPLATE = """
 <html>
@@ -161,7 +194,7 @@ class DamatuApi():
         res = self.post('d2File', data)
         # res = str(res).encode('utf-8')
         jres = json.loads(res)
-        print('jres', jres)
+        LOG.info('jres', jres)
         if jres['ret'] == 0:
             # 注意这个json里面有ret，id，result，cookie，根据自己的需要获取
             return (jres['result'])
@@ -216,11 +249,11 @@ class Bill(object):
     def save(self, text):
         with open(PictureFileSavePath, 'w') as f:
             f.write(base64.b64decode(text))
-            print(u'存储验证码')
+            LOG.info(u'存储验证码')
 
     def _get_verification_picture(self):
         try:
-            print('查询验证码')
+            LOG.info('查询验证码')
             # callback = "jQuery%s_%s" % (
             #     ''.join([random.choice(string.digits) for _ in range(22)]),
             #     ''.join([random.choice(string.digits) for _ in range(13)]))
@@ -230,7 +263,7 @@ class Bill(object):
             resp = requests.get('https://fpcyweb.tax.sh.gov.cn:1001/WebQuery/yzmQuery?callback=%s'
                                 '&fpdm=%s&r=%s' % (callback, fpdm, r), verify=False)
         except Exception as e:
-            print(u'获取验证码图片错误 - %s' % str(e))
+            LOG.error(u'获取验证码图片错误 - %s' % str(e))
         else:
             return json.loads(resp.content[len(callback) + 1:-1]), callback
         return None, ''
@@ -277,12 +310,15 @@ class Bill(object):
             url = url + params
             resp = requests.get(url, verify=False)
             status_code = resp.status_code
+            LOG.info('status_code:%s' % status_code)
         except Exception as e:
-            print(u'请求验证失败，正在重试请稍等！- %s' % str(e))
+            LOG.error(u'请求验证失败，正在重试请稍等！- %s' % str(e))
             return False
         else:
             if '"key1":"002"' in resp.content:
-                print(u'请求达到最大次数')
+                LOG.info('URL:%s' % url)
+                LOG.info('Find "key1":"002" - %s' % resp.content)
+                LOG.info(u'请求达到最大次数')
                 return True
         return False
 
@@ -401,28 +437,33 @@ class Excel(object):
             s.login(MAIL_USER, MAIL_PASSWORD)
             s.sendmail(MAIL_USER, MAIL_TO, msg.as_string())
             s.close()
-            print('Send mail succ - %s' % (MAIL_TO))
+            LOG.info('Send mail succ - %s' % (MAIL_TO))
             return True
         except Exception as e:
-            print('Send mail error - %s - %s - %s' % (
+            LOG.error('Send mail error - %s - %s - %s' % (
                 str(e), MAIL_TITLE, MAIL_TO
             ))
             return False
 
     def check(self):
         if not hasattr(self, 'bills'):
-            print(u'请先执行setup...')
+            LOG.error(u'请先执行setup...')
             return
 
+        num = 0
+        LOG.info('Total:%s' % len(self.bills))
         for bill in self.bills:
             is_ok = False
-
-            while not is_ok:
+            num += 1
+            LOG.info('.............Num: %s.........' % num)
+            start = time.time()
+            while not is_ok and int(time.time() - start) < CHECK_TIMEOUT:
                 try:
                     bill.check_task()
                     is_ok = bill.is_ok
+                    LOG.info('is_ok:%s' % is_ok)
                 except Exception as e:
-                    print('Check error - %s' % str(e))
+                    LOG.error('Check error - %s' % str(e))
                     continue
 
         self._send_mail()
