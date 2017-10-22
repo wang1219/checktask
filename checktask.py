@@ -287,8 +287,10 @@ class Bill(object):
         return False
 
     def __str__(self):
-        return "title:%s bill_id:%s bill_num:%s bill_date:%s bill_money:%s " % (
-            self.title, self.bill_id, self.bill_num, self.bill_date, self.bill_money
+        return "title:%s bill_id:%s %s, bill_num:%s %s, bill_date:%s %s, bill_money:%s %s " % (
+            self.title, self.bill_id, type(self.bill_id),
+            self.bill_num, type(self.bill_num), self.bill_date,
+            type(self.bill_date), self.bill_money, type(self.bill_money)
         )
 
 
@@ -320,7 +322,7 @@ class Excel(object):
                 if isinstance(row_data[0], basestring):
                     current_title = row_data[0]
                 else:
-                    bills.append(Bill(current_title, int(row_data[0]), int(row_data[1]),
+                    bills.append(Bill(current_title, str(row_data[0]), str(row_data[1]),
                                       xlrd.xldate.xldate_as_datetime(row_data[2], 0).strftime("%Y%m%d"), row_data[3]))
         return bills
 
