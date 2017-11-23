@@ -382,7 +382,7 @@ class Excel(object):
                 if isinstance(row_data[0], basestring):
                     current_title = row_data[0]
                 else:
-                    bills.append(Bill(current_title, int(row_data[0]), int(row_data[1]),
+                    bills.append(Bill(current_title, str(row_data[0]), str(row_data[1]),
                                       row_data[2].strftime("%Y%m%d"), row_data[3]))
         return bills
 
