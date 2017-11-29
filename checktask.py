@@ -1,7 +1,6 @@
 # encoding=utf-8
 
-import os
-import os.path
+import os import os.path
 import sys
 import hashlib
 import smtplib
@@ -435,7 +434,7 @@ class Excel(object):
         msg['From'] = MAIL_USER
         msg['To'] = ','.join(MAIL_TO)
         try:
-            s = smtplib.SMTP(MAIL_HOST, MAIL_PORT)
+            s = smtplib.SMTP_SSL(MAIL_HOST, MAIL_PORT)
             s.login(MAIL_USER, MAIL_PASSWORD)
             s.sendmail(MAIL_USER, MAIL_TO, msg.as_string())
             s.close()
