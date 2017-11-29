@@ -270,6 +270,7 @@ class Bill(object):
     def check_task(self):
         keys, callback = self._get_verification_picture()
         if keys and keys.get('key4') == '00':
+            LOG.info('Key4 is 00')
             # keys['key4'] == '00' 为最正常验证码，其他奇葩的他们解析不了
             # self.save(keys['key1'])
 
@@ -281,6 +282,7 @@ class Bill(object):
                 if verification_code == 'ERROR':
                     return False
                 self.verification_code = verification_code
+                LOG.info('verification_code:%s' % verification_code)
                 self.is_ok = self._post_request(callback, keys.get('key2'), keys.get('key3'), keys.get('key4'))
                 return True
 
@@ -452,11 +454,10 @@ class Excel(object):
             return
 
         num = 0
-        LOG.info('Total:%s' % len(self.bills))
         for bill in self.bills:
             is_ok = False
             num += 1
-            LOG.info('.............Num: %s.........' % num)
+            LOG.info('.............Total:%s Num: %s.........' % (len(self.bills), num))
             start = time.time()
             while not is_ok and int(time.time() - start) < CHECK_TIMEOUT:
                 try:
